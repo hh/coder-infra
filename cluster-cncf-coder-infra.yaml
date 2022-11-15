@@ -1,0 +1,173 @@
+apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+kind: TalosControlPlane
+metadata:
+  name: cncf-coder-controlplane
+  namespace: cncf-coder
+spec:
+  controlPlaneConfig:
+    controlplane:
+      configPatches:
+      - op: replace
+        path: /machine/install
+        value:
+          bootloader: true
+          disk: /dev/sda
+          image: ghcr.io/talos-systems/installer:v1.2.6
+          wipe: false
+      - op: add
+        path: /machine/kubelet/extraArgs
+        value:
+          cloud-provider: external
+          provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
+      - op: add
+        path: /cluster/apiServer/extraArgs
+        value:
+          cloud-provider: external
+      - op: add
+        path: /cluster/controllerManager/extraArgs
+        value:
+          cloud-provider: external
+      - op: add
+        path: /cluster/allowSchedulingOnMasters
+        value: true
+      generateType: controlplane
+      talosVersion: v1.2.6
+    init:
+      configPatches:
+      - op: replace
+        path: /machine/install
+        value:
+          bootloader: true
+          disk: /dev/sda
+          image: ghcr.io/talos-systems/installer:v1.2.6
+          wipe: false
+      - op: add
+        path: /machine/kubelet/extraArgs
+        value:
+          cloud-provider: external
+          provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
+      - op: add
+        path: /cluster/apiServer/extraArgs
+        value:
+          cloud-provider: external
+      - op: add
+        path: /cluster/controllerManager/extraArgs
+        value:
+          cloud-provider: external
+      - op: add
+        path: /cluster/allowSchedulingOnMasters
+        value: true
+      generateType: init
+      talosVersion: v1.2.6
+  infrastructureTemplate:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: PacketMachineTemplate
+    name: cncf-coder-control-plane
+  replicas: 1
+  version: v1.25.3
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketMachineTemplate
+metadata:
+  name: cncf-coder-control-plane
+  namespace: cncf-coder
+spec:
+  template:
+    spec:
+      billingCycle: hourly
+      machineType: c3.small.x86
+      os: talos_v1
+      sshKeys:
+      - gh:BobyMCbobs
+      tags: []
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  name: cncf-coder
+  namespace: cncf-coder
+spec:
+  clusterNetwork:
+    pods:
+      cidrBlocks:
+      - 192.168.0.0/16
+    services:
+      cidrBlocks:
+      - 172.26.0.0/16
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
+    kind: TalosControlPlane
+    name: cncf-coder-control-plane
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: PacketCluster
+    name: cncf-coder
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketCluster
+metadata:
+  name: cncf-coder
+  namespace: cncf-coder
+spec:
+  facility: sv15
+  projectID: 7a44b778-41d2-49fa-9c92-99148516c600
+  vipManager: CPEM
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: cncf-coder
+    pool: worker-a
+  name: cncf-coder-worker-a
+  namespace: cncf-coder
+spec:
+  clusterName: cncf-coder
+  replicas: 0
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/cluster-name: cncf-coder
+      pool: worker-a
+  template:
+    metadata:
+      labels:
+        cluster.x-k8s.io/cluster-name: cncf-coder
+        pool: worker-a
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+          kind: TalosConfigTemplate
+          name: cncf-coder-worker-a
+      clusterName: cncf-coder
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: PacketMachineTemplate
+        name: cncf-coder-worker-a
+      version: v1.25.3
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: PacketMachineTemplate
+metadata:
+  name: cncf-coder-worker-a
+  namespace: cncf-coder
+spec:
+  template:
+    spec:
+      billingCycle: hourly
+      machineType: c3.small.x86
+      os: talos_v1
+      sshKeys:
+      - gh:BobyMCbobs
+      tags: []
+---
+apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
+kind: TalosConfigTemplate
+metadata:
+  name: cncf-coder-worker-a
+  namespace: cncf-coder
+spec:
+  template:
+    spec:
+      generateType: join
+      talosVersion: v1.2.6

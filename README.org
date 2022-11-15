@@ -1,0 +1,98 @@
+#+title: Coder Infra
+
+#+begin_quote
+Infrastructure to support a Coder instance, provided by CNCF, for the use of contributors
+#+end_quote
+
+* Project contents
+- Terraform to provision Kubernetes resources to a cluster
+
+* Setup
+A Kubernetes cluster is required to initialise the target cluster.
+
+Either use an existing cluster or create a ~kind~ cluster
+#+begin_src tmate :window coder-infra
+kind create cluster
+#+end_src
+
+Set credentials for Equinix Metal for initialising the cluster-api provider
+#+begin_src tmate :window coder-infra
+read PACKET_API_KEY; export PACKET_API_KEY
+#+end_src
+
+Initialise cluster-api with the Packet (Equinix Metal) infrastructure provider
+#+begin_src tmate :window coder-infra
+clusterctl init --infrastructure packet --bootstrap talos --control-plane talos
+#+end_src
+
+List the variables used in the cluster configuration
+#+begin_src shell
+clusterctl generate cluster --list-variables cluster-template.yaml 2>/dev/null
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Required Variables:
+  - CONTROLPLANE_NODE_TYPE
+  - FACILITY
+  - PROJECT_ID
+  - SSH_KEY
+  - WORKER_NODE_TYPE
+
+Optional Variables:
+  - CLUSTER_NAME                 (defaults to cluster-template.yaml)
+  - CONTROL_PLANE_MACHINE_COUNT  (defaults to 1)
+  - CPEM_VERSION                 (defaults to "v3.5.0")
+  - KUBERNETES_VERSION           (defaults to 1.23.5)
+  - NODE_OS                      (defaults to "ubuntu_18_04")
+  - POD_CIDR                     (defaults to "192.168.0.0/16")
+  - SERVICE_CIDR                 (defaults to "172.26.0.0/16")
+  - WORKER_MACHINE_COUNT         (defaults to 0)
+
+#+end_example
+
+Create a namespace for the cluster to live in
+#+begin_src shell :results silent
+kubectl apply -f ./cluster-cncf-coder-namespace.yaml
+#+end_src
+
+Generate a static cluster configuration
+#+begin_src tmate :window coder-infra
+export CONTROLPLANE_NODE_TYPE=c3.small.x86 \
+  WORKER_NODE_TYPE=c3.small.x86 \
+  FACILITY=sv15 \
+  PROJECT_ID=7a44b778-41d2-49fa-9c92-99148516c600 \
+  SSH_KEY=gh:BobyMCbobs \
+  TALOS_VERSION=v1.2.6 \
+  KUBERNETES_VERSION=v1.25.3
+clusterctl generate cluster cncf-coder --target-namespace cncf-coder --from cluster-template.yaml \
+    > ./cluster-cncf-coder-infra.yaml
+#+end_src
+
+* Installation
+#+begin_src shell
+kubectl -n cncf-coder apply -f ./cluster-cncf-coder-infra.yaml
+#+end_src
+
+#+RESULTS:
+#+begin_example
+taloscontrolplane.controlplane.cluster.x-k8s.io/cncf-coder-controlplane configured
+packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-control-plane configured
+cluster.cluster.x-k8s.io/cncf-coder unchanged
+packetcluster.infrastructure.cluster.x-k8s.io/cncf-coder unchanged
+machinedeployment.cluster.x-k8s.io/cncf-coder-worker-a unchanged
+packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-worker-a configured
+talosconfigtemplate.bootstrap.cluster.x-k8s.io/cncf-coder-worker-a unchanged
+#+end_example
+
+* Tear down
+#+begin_src shell
+kubectl -n cncf-coder delete cluster cncf-coder
+kubectl delete ns cncf-coder
+#+end_src
+
+#+RESULTS:
+#+begin_example
+cluster.cluster.x-k8s.io "cncf-coder" deleted
+namespace "cncf-coder" deleted
+#+end_example
