@@ -76,14 +76,19 @@ kubectl -n cncf-coder apply -f ./cluster-cncf-coder-infra.yaml
 
 #+RESULTS:
 #+begin_example
-taloscontrolplane.controlplane.cluster.x-k8s.io/cncf-coder-controlplane configured
-packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-control-plane configured
-cluster.cluster.x-k8s.io/cncf-coder unchanged
-packetcluster.infrastructure.cluster.x-k8s.io/cncf-coder unchanged
-machinedeployment.cluster.x-k8s.io/cncf-coder-worker-a unchanged
-packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-worker-a configured
-talosconfigtemplate.bootstrap.cluster.x-k8s.io/cncf-coder-worker-a unchanged
+taloscontrolplane.controlplane.cluster.x-k8s.io/cncf-coder-control-plane created
+packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-control-plane created
+cluster.cluster.x-k8s.io/cncf-coder created
+packetcluster.infrastructure.cluster.x-k8s.io/cncf-coder created
+machinedeployment.cluster.x-k8s.io/cncf-coder-worker-a created
+packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-worker-a created
+talosconfigtemplate.bootstrap.cluster.x-k8s.io/cncf-coder-worker-a created
 #+end_example
+
+* Watch provisioning
+#+begin_src tmate :window coder-infra
+kubectl -n cncf-coder get packetmachine,machine,taloscontrolplane,secret,cm
+#+end_src
 
 * Tear down
 #+begin_src shell
