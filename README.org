@@ -27,7 +27,7 @@ clusterctl init --infrastructure packet --bootstrap talos --control-plane talos
 
 List the variables used in the cluster configuration
 #+begin_src shell
-clusterctl generate cluster --list-variables cluster-template.yaml 2>/dev/null
+clusterctl generate cluster --infrastructure packet --list-variables cluster-template.yaml 2>/dev/null
 #+end_src
 
 #+RESULTS:
@@ -65,7 +65,7 @@ export CONTROLPLANE_NODE_TYPE=c3.small.x86 \
   SSH_KEY=gh:BobyMCbobs \
   TALOS_VERSION=v1.2.6 \
   KUBERNETES_VERSION=v1.25.3
-clusterctl generate cluster cncf-coder --target-namespace cncf-coder --from cluster-template.yaml \
+clusterctl generate cluster cncf-coder --target-namespace cncf-coder --from cluster-template-packet-kubeadm.yaml \
     > ./cluster-cncf-coder-infra.yaml
 #+end_src
 
@@ -76,19 +76,162 @@ kubectl -n cncf-coder apply -f ./cluster-cncf-coder-infra.yaml
 
 #+RESULTS:
 #+begin_example
-taloscontrolplane.controlplane.cluster.x-k8s.io/cncf-coder-control-plane created
+kubeadmcontrolplane.controlplane.cluster.x-k8s.io/cncf-coder-control-plane created
 packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-control-plane created
 cluster.cluster.x-k8s.io/cncf-coder created
 packetcluster.infrastructure.cluster.x-k8s.io/cncf-coder created
 machinedeployment.cluster.x-k8s.io/cncf-coder-worker-a created
 packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-worker-a created
-talosconfigtemplate.bootstrap.cluster.x-k8s.io/cncf-coder-worker-a created
+kubeadmconfigtemplate.bootstrap.cluster.x-k8s.io/cncf-coder-worker-a created
 #+end_example
 
 * Watch provisioning
 #+begin_src tmate :window coder-infra
 kubectl -n cncf-coder get packetmachine,machine,taloscontrolplane,secret,cm
 #+end_src
+
+* Fetch Kubeconfig
+
+#+begin_src shell
+kubectl -n cncf-coder get secret cncf-coder-kubeconfig -o=jsonpath='{.data.value}' | base64 -d > /tmp/cncf-coder-kubeconfig
+#+end_src
+
+* Prepare
+Cert-Manager
+#+begin_src shell :results silent
+curl -o ./cert-manager.yaml -L https://github.com/cert-manager/cert-manager/releases/download/v1.10.0/cert-manager.yaml
+#+end_src
+
+Cilium
+#+begin_src yaml :tangle ./values/cilium.yaml
+ipam:
+  mode: kubernetes
+  operator:
+    clusterPoolIPv4PodCIDR: 192.168.0.0/16
+
+nodePort:
+  enabled: true
+
+hostServices:
+  enabled: true
+
+externalIPs:
+  enabled: true
+
+hostPort:
+  enabled: true
+
+nodeinit:
+  enabled: true
+
+# kubeProxyReplacement: strict
+
+# hubble:
+#   tls:
+#     auto:
+#       method: certmanager
+#       certManagerIssuerRef:
+#         group: cert-manager.io
+#         kind: Issuer
+#         name: cilium-ca-issuer
+#   relay:
+#     enabled: true
+#   ui:
+#     enabled: true
+
+#+end_src
+
+#+begin_src shell
+helm repo add cilium https://helm.cilium.io/
+helm template cilium cilium/cilium \
+    --version 1.11.6 \
+    --namespace kube-system \
+    -f ./values/cilium.yaml \
+    > ./cilium.yaml
+#+end_src
+
+#+RESULTS:
+#+begin_example
+"cilium" already exists with the same configuration, skipping
+#+end_example
+
+* Install
+Cert-Manager
+#+begin_src shell
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./cert-manager.yaml
+#+end_src
+
+#+RESULTS:
+#+begin_example
+namespace/cert-manager created
+customresourcedefinition.apiextensions.k8s.io/clusterissuers.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/challenges.acme.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/certificaterequests.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/issuers.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/certificates.cert-manager.io created
+customresourcedefinition.apiextensions.k8s.io/orders.acme.cert-manager.io created
+serviceaccount/cert-manager-cainjector created
+serviceaccount/cert-manager created
+serviceaccount/cert-manager-webhook created
+configmap/cert-manager-webhook created
+clusterrole.rbac.authorization.k8s.io/cert-manager-cainjector created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-issuers created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificates created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-orders created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-challenges created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
+clusterrole.rbac.authorization.k8s.io/cert-manager-view created
+clusterrole.rbac.authorization.k8s.io/cert-manager-edit created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
+clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
+clusterrole.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-cainjector created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-issuers created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificates created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-orders created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-challenges created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
+clusterrolebinding.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
+role.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
+role.rbac.authorization.k8s.io/cert-manager:leaderelection created
+role.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
+rolebinding.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
+rolebinding.rbac.authorization.k8s.io/cert-manager:leaderelection created
+rolebinding.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
+service/cert-manager created
+service/cert-manager-webhook created
+deployment.apps/cert-manager-cainjector created
+deployment.apps/cert-manager created
+deployment.apps/cert-manager-webhook created
+mutatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
+validatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
+#+end_example
+
+Cilium
+#+begin_src shell
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./cilium.yaml
+#+end_src
+
+#+RESULTS:
+#+begin_example
+serviceaccount/cilium unchanged
+serviceaccount/cilium-operator unchanged
+secret/hubble-ca-secret created
+secret/hubble-server-certs created
+configmap/cilium-config unchanged
+clusterrole.rbac.authorization.k8s.io/cilium unchanged
+clusterrole.rbac.authorization.k8s.io/cilium-operator unchanged
+clusterrolebinding.rbac.authorization.k8s.io/cilium unchanged
+clusterrolebinding.rbac.authorization.k8s.io/cilium-operator unchanged
+service/hubble-peer unchanged
+daemonset.apps/cilium configured
+daemonset.apps/cilium-node-init configured
+deployment.apps/cilium-operator configured
+#+end_example
 
 * Tear down
 #+begin_src shell

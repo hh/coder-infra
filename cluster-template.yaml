@@ -26,7 +26,7 @@ spec:
           path: /machine/kubelet/extraArgs
           value:
             cloud-provider: external
-            provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+            # provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
         - op: add
           path: /cluster/apiServer/extraArgs
           value:
@@ -38,6 +38,10 @@ spec:
         - op: add
           path: /cluster/allowSchedulingOnMasters
           value: true
+        - op: add
+          path: /cluster/extraManifests
+          value:
+            - https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.5.0/deployment.yaml
     controlplane:
       generateType: controlplane
       talosVersion: ${TALOS_VERSION}
@@ -54,7 +58,7 @@ spec:
           path: /machine/kubelet/extraArgs
           value:
             cloud-provider: external
-            provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
+            # provider-id: "equinixmetal://{{ `{{ v1.instance_id }}` }}"
         - op: add
           path: /cluster/apiServer/extraArgs
           value:
@@ -66,6 +70,10 @@ spec:
         - op: add
           path: /cluster/allowSchedulingOnMasters
           value: true
+        - op: add
+          path: /cluster/extraManifests
+          value:
+            - https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.5.0/deployment.yaml
 ---
 apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
 kind: PacketMachineTemplate

@@ -1,68 +1,99 @@
-apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
-kind: TalosControlPlane
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: KubeadmControlPlane
 metadata:
   name: cncf-coder-control-plane
   namespace: cncf-coder
 spec:
-  controlPlaneConfig:
-    controlplane:
-      configPatches:
-      - op: replace
-        path: /machine/install
-        value:
-          bootloader: true
-          disk: /dev/sda
-          image: ghcr.io/siderolabs/installer:v1.2.6
-          wipe: false
-      - op: add
-        path: /machine/kubelet/extraArgs
-        value:
+  kubeadmConfigSpec:
+    clusterConfiguration:
+      apiServer:
+        extraArgs:
+          cloud-provider: external
+      controllerManager:
+        extraArgs:
+          cloud-provider: external
+    initConfiguration:
+      nodeRegistration:
+        kubeletExtraArgs:
           cloud-provider: external
           provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
-      - op: add
-        path: /cluster/apiServer/extraArgs
-        value:
-          cloud-provider: external
-      - op: add
-        path: /cluster/controllerManager/extraArgs
-        value:
-          cloud-provider: external
-      - op: add
-        path: /cluster/allowSchedulingOnMasters
-        value: true
-      generateType: controlplane
-      talosVersion: v1.2.6
-    init:
-      configPatches:
-      - op: replace
-        path: /machine/install
-        value:
-          bootloader: true
-          disk: /dev/sda
-          image: ghcr.io/siderolabs/installer:v1.2.6
-          wipe: false
-      - op: add
-        path: /machine/kubelet/extraArgs
-        value:
+    joinConfiguration:
+      nodeRegistration:
+        ignorePreflightErrors:
+        - DirAvailable--etc-kubernetes-manifests
+        kubeletExtraArgs:
           cloud-provider: external
           provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
-      - op: add
-        path: /cluster/apiServer/extraArgs
-        value:
-          cloud-provider: external
-      - op: add
-        path: /cluster/controllerManager/extraArgs
-        value:
-          cloud-provider: external
-      - op: add
-        path: /cluster/allowSchedulingOnMasters
-        value: true
-      generateType: init
-      talosVersion: v1.2.6
-  infrastructureTemplate:
-    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
-    kind: PacketMachineTemplate
-    name: cncf-coder-control-plane
+    postKubeadmCommands:
+    - |
+      cat <<EOF >> /etc/network/interfaces
+      auto lo:0
+      iface lo:0 inet static
+        address {{ .controlPlaneEndpoint }}
+        netmask 255.255.255.255
+      EOF
+      systemctl restart networking
+      mkdir -p $HOME/.kube
+      cp /etc/kubernetes/admin.conf $HOME/.kube/config
+      echo "source <(kubectl completion bash)" >> $HOME/.bashrc
+      echo "alias k=kubectl" >> $HOME/.bashrc
+      echo "complete -o default -F __start_kubectl k" >> $HOME/.bashrc
+      if [ -f "/run/kubeadm/kubeadm.yaml" ]; then
+        export KUBECONFIG=/etc/kubernetes/admin.conf
+        kubectl taint nodes --all node-role.kubernetes.io/control-plane-
+        export CPEM_YAML=https://github.com/equinix/cloud-provider-equinix-metal/releases/download/v3.5.0/deployment.yaml
+        export SECRET_DATA='cloud-sa.json=''{"apiKey": "{{ .apiKey }}","projectID": "7a44b778-41d2-49fa-9c92-99148516c600", "eipTag": "cluster-api-provider-packet:cluster-id:cncf-coder", "eipHealthCheckUseHostIP": true}'''
+        kubectl create secret generic -n kube-system metal-cloud-config --from-literal="${SECRET_DATA}" || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="${SECRET_DATA}") || (sleep 1 && kubectl create secret generic -n kube-system metal-cloud-config --from-literal="${SECRET_DATA}")
+        kubectl apply -f ${CPEM_YAML} || (sleep 1 && kubectl apply -f ${CPEM_YAML}) || (sleep 1 && kubectl apply -f ${CPEM_YAML})
+      fi
+    preKubeadmCommands:
+    - |
+      sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+      swapoff -a
+      mount -a
+      cat <<EOF > /etc/modules-load.d/containerd.conf
+      overlay
+      br_netfilter
+      EOF
+      modprobe overlay
+      modprobe br_netfilter
+      cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+      net.bridge.bridge-nf-call-iptables  = 1
+      net.ipv4.ip_forward                 = 1
+      net.bridge.bridge-nf-call-ip6tables = 1
+      EOF
+      sysctl --system
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get remove -y docker docker-engine containerd runc
+      apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+      major_vers=$(lsb_release -r | awk '{ print $2 }' | cut -d. -f1)
+      if [[ "$major_vers" -ge 20 ]]; then
+        apt-get install -y kubetail
+      fi
+      mkdir -p /etc/apt/keyrings
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+      echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+      apt-get update -y
+      TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
+      RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+      apt-get install -y containerd.io kubelet=${RESOLVED_KUBERNETES_VERSION} kubeadm=${RESOLVED_KUBERNETES_VERSION} kubectl=${RESOLVED_KUBERNETES_VERSION}
+      containerd config default > /etc/containerd/config.toml
+      cat  <<EOF > /etc/crictl.yaml
+      runtime-endpoint: unix:///run/containerd/containerd.sock
+      image-endpoint: unix:///run/containerd/containerd.sock
+      EOF
+      sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+      sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
+      systemctl restart containerd
+      ping -c 3 -q {{ .controlPlaneEndpoint }} && echo OK || ip addr add {{ .controlPlaneEndpoint }} dev lo
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: PacketMachineTemplate
+      name: cncf-coder-control-plane
   replicas: 1
   version: v1.25.3
 ---
@@ -76,7 +107,7 @@ spec:
     spec:
       billingCycle: hourly
       machineType: c3.small.x86
-      os: talos_v1
+      os: ubuntu_18_04
       sshKeys:
       - gh:BobyMCbobs
       tags: []
@@ -95,8 +126,8 @@ spec:
       cidrBlocks:
       - 172.26.0.0/16
   controlPlaneRef:
-    apiVersion: controlplane.cluster.x-k8s.io/v1alpha3
-    kind: TalosControlPlane
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: KubeadmControlPlane
     name: cncf-coder-control-plane
   infrastructureRef:
     apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -136,8 +167,8 @@ spec:
     spec:
       bootstrap:
         configRef:
-          apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-          kind: TalosConfigTemplate
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: KubeadmConfigTemplate
           name: cncf-coder-worker-a
       clusterName: cncf-coder
       infrastructureRef:
@@ -156,18 +187,59 @@ spec:
     spec:
       billingCycle: hourly
       machineType: c3.small.x86
-      os: talos_v1
+      os: ubuntu_18_04
       sshKeys:
       - gh:BobyMCbobs
       tags: []
 ---
-apiVersion: bootstrap.cluster.x-k8s.io/v1alpha3
-kind: TalosConfigTemplate
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: KubeadmConfigTemplate
 metadata:
   name: cncf-coder-worker-a
   namespace: cncf-coder
 spec:
   template:
     spec:
-      generateType: join
-      talosVersion: v1.2.6
+      joinConfiguration:
+        nodeRegistration:
+          kubeletExtraArgs:
+            cloud-provider: external
+            provider-id: equinixmetal://{{ `{{ v1.instance_id }}` }}
+      preKubeadmCommands:
+      - |
+        sed -ri '/\sswap\s/s/^#?/#/' /etc/fstab
+        swapoff -a
+        mount -a
+        cat <<EOF > /etc/modules-load.d/containerd.conf
+        overlay
+        br_netfilter
+        EOF
+        modprobe overlay
+        modprobe br_netfilter
+        cat <<EOF > /etc/sysctl.d/99-kubernetes-cri.conf
+        net.bridge.bridge-nf-call-iptables  = 1
+        net.ipv4.ip_forward                 = 1
+        net.bridge.bridge-nf-call-ip6tables = 1
+        EOF
+        sysctl --system
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update -y
+        apt-get remove -y docker docker-engine containerd runc
+        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release linux-generic jq
+        mkdir -p /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+        echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" > /etc/apt/sources.list.d/kubernetes.list
+        apt-get update -y
+        TRIMMED_KUBERNETES_VERSION=$(echo {{ .kubernetesVersion }} | sed 's/\./\\\\./g' | sed 's/^v//')
+        RESOLVED_KUBERNETES_VERSION=$(apt-cache madison kubelet | awk -v VERSION=${TRIMMED_KUBERNETES_VERSION} '$3~ VERSION { print $3 }' | head -n1)
+        apt-get install -y containerd.io kubelet=${RESOLVED_KUBERNETES_VERSION} kubeadm=${RESOLVED_KUBERNETES_VERSION} kubectl=${RESOLVED_KUBERNETES_VERSION}
+        cat  <<EOF > /etc/crictl.yaml
+        runtime-endpoint: unix:///run/containerd/containerd.sock
+        image-endpoint: unix:///run/containerd/containerd.sock
+        EOF
+        containerd config default > /etc/containerd/config.toml
+        sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+        sed -i "s,sandbox_image.*$,sandbox_image = \"$(kubeadm config images list | grep pause | sort -r | head -n1)\"," /etc/containerd/config.toml
+        systemctl restart containerd
