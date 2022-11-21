@@ -1,0 +1,26 @@
+podSecurityPolicy:
+  enabled: false
+controller:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - ingress-nginx
+            topologyKey: kubernetes.io/hostname
+          weight: 1
+  autoscaling:
+    enabled: true
+    maxReplicas: 3
+    minReplicas: 3
+    targetCPUUtilizationPercentage: 80
+  minAvailable: 1
+  ingressClassResource:
+    default: true
+  service:
+    externalTrafficPolicy: Local
+    type: LoadBalancer

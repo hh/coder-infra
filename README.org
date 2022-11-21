@@ -7,6 +7,16 @@ Infrastructure to support a Coder instance, provided by CNCF, for the use of con
 * Project contents
 - Terraform to provision Kubernetes resources to a cluster
 
+* Architecture
+Deploy a Kubernetes cluster running on Equinix Metal which runs Coder server.
+
+Running in the cluster will be
+- Cert-Manager
+- Nginx-Ingress :: serve services like Coder server
+- MetalLB :: BGP IP allocation
+- PowerDNS :: use to allow setting up of DNS01 validation for TLS certs
+- distribution(s) :: use as a proxy cache for each common registry to save bandwidth and time
+
 * Setup
 A Kubernetes cluster is required to initialise the target cluster.
 
@@ -64,7 +74,8 @@ export CONTROLPLANE_NODE_TYPE=c3.small.x86 \
   PROJECT_ID=7a44b778-41d2-49fa-9c92-99148516c600 \
   SSH_KEY=gh:BobyMCbobs \
   TALOS_VERSION=v1.2.6 \
-  KUBERNETES_VERSION=v1.25.3
+  KUBERNETES_VERSION=v1.25.3 \
+  CONTROL_PLANE_MACHINE_COUNT=3
 clusterctl generate cluster cncf-coder --target-namespace cncf-coder --from cluster-template-packet-kubeadm.yaml \
     > ./cluster-cncf-coder-infra.yaml
 #+end_src
@@ -155,6 +166,24 @@ helm template cilium cilium/cilium \
 "cilium" already exists with the same configuration, skipping
 #+end_example
 
+Metallb
+#+begin_src shell :results silent
+helm repo add metallb https://metallb.github.io/metallb
+helm template --create-namespace -n metallb-system metallb metallb/metallb --version 0.13.7 --values values/metallb.yaml \
+    > ./metallb.yaml
+#+end_src
+
+ingress-nginx
+#+begin_src shell
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm template -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx --version 4.4.0 --values ./values/ingress-nginx.yaml > ./ingress-nginx.yaml
+#+end_src
+
+#+RESULTS:
+#+begin_example
+"ingress-nginx" already exists with the same configuration, skipping
+#+end_example
+
 * Install
 Cert-Manager
 #+begin_src shell
@@ -232,6 +261,20 @@ daemonset.apps/cilium configured
 daemonset.apps/cilium-node-init configured
 deployment.apps/cilium-operator configured
 #+end_example
+
+metallb
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace metallb-system --dry-run=client -o yaml \
+  | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n metallb-system apply -f metallb.yaml
+#+end_src
+
+ingress-nginx
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace ingress-nginx --dry-run=client -o yaml \
+  | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -n ingress-nginx -f ./ingress-nginx.yaml
+#+end_src
 
 * Tear down
 #+begin_src shell
