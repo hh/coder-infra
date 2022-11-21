@@ -293,7 +293,21 @@ kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -n ingress-nginx -f ./ingr
 PowerDNS
 #+begin_src shell :results silent
 export LB_IP="$(kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system get service cloud-provider-equinix-metal-kubernetes-external -o=jsonpath='{.status.loadBalancer.ingress[0].ip}')"
-envsubst '${LB_IP}' | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+envsubst '${LB_IP}' < ./powerdns.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+#+end_src
+
+Certs
+#+begin_src shell :results silent
+export LB_IP="$(kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system get service cloud-provider-equinix-metal-kubernetes-external -o=jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+envsubst '${LB_IP}' < ./certs.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+#+end_src
+
+External-DNS
+#+begin_src shell :results silent
+export LB_IP="$(kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system get service cloud-provider-equinix-metal-kubernetes-external -o=jsonpath='{.status.loadBalancer.ingress[0].ip}')"
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./external-dns-crd.yaml
+envsubst '${LB_IP}' < ./external-dns.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+envsubst '${LB_IP}' < ./dnsendpoint.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 #+end_src
 
 * Tear down

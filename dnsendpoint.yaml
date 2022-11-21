@@ -1,0 +1,17 @@
+apiVersion: externaldns.k8s.io/v1alpha1
+kind: DNSEndpoint
+metadata:
+  name: coder.sharing.io
+  namespace: coder
+spec:
+  endpoints:
+    - dnsName: "coder.sharing.io"
+      recordTTL: 60
+      recordType: A
+      targets:
+        - ${LB_IP}
+    - dnsName: "*.coder.sharing.io"
+      recordTTL: 60
+      recordType: A
+      targets:
+        - ${LB_IP}
