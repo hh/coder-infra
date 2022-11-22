@@ -184,7 +184,7 @@ metadata:
   namespace: powerdns
 data:
   pdns.conf: |
-    allow-dnsupdate-from=192.168.0.0/16
+    allow-dnsupdate-from=10.244.0.0/16
     api=yes
     api-key=pairingissharing
     default-soa-mail=hostmaster.coder.sharing.io
