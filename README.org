@@ -206,6 +206,13 @@ Cilium
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./cilium.yaml
 #+end_src
 
+Longhorn
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace longhorn-system --dry-run=client -o yaml \
+  | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./longhorn.yaml
+#+end_src
+
 Cert-Manager
 #+begin_src shell :results silent
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./cert-manager.yaml
@@ -245,13 +252,6 @@ export LB_IP="$(kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system g
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./external-dns-crd.yaml
 envsubst '${LB_IP}' < ./external-dns.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 envsubst '${LB_IP}' < ./dnsendpoint.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
-#+end_src
-
-Longhorn
-#+begin_src shell :results silent
-kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace longhorn-system --dry-run=client -o yaml \
-  | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
-kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./longhorn.yaml
 #+end_src
 
 * Tear down

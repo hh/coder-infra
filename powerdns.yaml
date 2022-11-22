@@ -241,7 +241,7 @@ spec:
               command:
                 - /bin/sh
                 - -c
-                - pdnsutil list-zone coder.pair.sharing.io
+                - pdnsutil list-zone coder.sharing.io
           lifecycle:
             postStart:
               exec:
@@ -255,20 +255,20 @@ spec:
                       a=$[a+1]
                       echo 'stage: '$a
                       if nc -w 1 -vz powerdns-service-db 3306; then
-                        (! pdnsutil list-zone coder.pair.sharing.io) && pdnsutil create-zone coder.pair.sharing.io
+                        (! pdnsutil list-zone coder.sharing.io) && pdnsutil create-zone coder.sharing.io
                       fi
                       if ! pdnsutil list-tsig-keys pair | grep -E 'pair..*'; then
                         pdnsutil generate-tsig-key pair hmac-md5
-                        pdnsutil activate-tsig-key coder.pair.sharing.io pair master
-                        pdnsutil set-meta coder.pair.sharing.io TSIG-ALLOW-DNSUPDATE pair
-                        pdnsutil set-meta coder.pair.sharing.io NOTIFY-DNSUPDATE 1
-                        pdnsutil set-meta coder.pair.sharing.io SOA-EDIT-DNSUPDATE EPOCH
+                        pdnsutil activate-tsig-key coder.sharing.io pair master
+                        pdnsutil set-meta coder.sharing.io TSIG-ALLOW-DNSUPDATE pair
+                        pdnsutil set-meta coder.sharing.io NOTIFY-DNSUPDATE 1
+                        pdnsutil set-meta coder.sharing.io SOA-EDIT-DNSUPDATE EPOCH
                       fi
-                      if ! pdnsutil list-zone coder.pair.sharing.io | grep -E "^coder.pair.sharing.io.*60.*IN.*NS.*ns1.coder.pair.sharing.io.$"; then
-                        pdnsutil add-record coder.pair.sharing.io @ NS 60 ns1.coder.pair.sharing.io
+                      if ! pdnsutil list-zone coder.sharing.io | grep -E "^coder.sharing.io.*60.*IN.*NS.*ns1.coder.sharing.io.$"; then
+                        pdnsutil add-record coder.sharing.io @ NS 60 ns1.coder.sharing.io
                       fi
-                      if ! pdnsutil list-zone coder.pair.sharing.io | grep -E "^coder.pair.sharing.io.*60.*IN.*A.*${LB_IP}$"; then
-                        pdnsutil add-record coder.pair.sharing.io @ A 60 ${LB_IP}
+                      if ! pdnsutil list-zone coder.sharing.io | grep -E "^coder.sharing.io.*60.*IN.*A.*${LB_IP}$"; then
+                        pdnsutil add-record coder.sharing.io @ A 60 ${LB_IP}
                       fi
                       echo 'End Stage'
                       a=200
@@ -314,9 +314,9 @@ spec:
             - name: PDNS_soa_minimum_ttl
               value: "60"
             - name: PDNS_default_soa_name
-              value: "ns1.coder.pair.sharing.io"
+              value: "ns1.coder.sharing.io"
             - name: PDNS_default_soa_mail
-              value: "hostmaster.coder.pair.sharing.io"
+              value: "hostmaster.coder.sharing.io"
             - name: PDNS_gmysql_innodb_read_committed
               value: "no"
             - name: MYSQL_ENV_MYSQL_HOST
@@ -509,7 +509,7 @@ spec:
             - -c
             - |
               time (
-                until kubectl -n powerdns exec deployment/powerdns -- pdnsutil list-zone coder.pair.sharing.io > /dev/null 2>&1; do
+                until kubectl -n powerdns exec deployment/powerdns -- pdnsutil list-zone coder.sharing.io > /dev/null 2>&1; do
                   sleep 1s
                 done
               )
