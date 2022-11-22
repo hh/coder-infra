@@ -107,7 +107,7 @@ spec:
     spec:
       billingCycle: hourly
       machineType: c3.small.x86
-      os: ubuntu_22_04
+      os: ubuntu_20_04
       sshKeys:
       - gh:BobyMCbobs
       tags: []
@@ -121,10 +121,10 @@ spec:
   clusterNetwork:
     pods:
       cidrBlocks:
-      - 192.168.0.0/16
+      - 10.244.0.0/16
     services:
       cidrBlocks:
-      - 172.26.0.0/16
+      - 10.96.0.0/12
   controlPlaneRef:
     apiVersion: controlplane.cluster.x-k8s.io/v1beta1
     kind: KubeadmControlPlane
@@ -187,7 +187,7 @@ spec:
     spec:
       billingCycle: hourly
       machineType: c3.small.x86
-      os: ubuntu_22_04
+      os: ubuntu_20_04
       sshKeys:
       - gh:BobyMCbobs
       tags: []

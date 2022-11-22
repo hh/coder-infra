@@ -1,11 +1,10 @@
-
-
 # Cilium
 
 ipam:
-  mode: kubernetes
+  mode: cluster-pool
   operator:
-    clusterPoolIPv4PodCIDR: 192.168.0.0/16
+    clusterPoolIPv4PodCIDR: 10.244.0.0/16
+    clusterPoolIPv4MaskSize: 24
 
 nodePort:
   enabled: true
@@ -21,7 +20,6 @@ hostPort:
 
 nodeinit:
   enabled: true
-
 # kubeProxyReplacement: strict
 
 # hubble:

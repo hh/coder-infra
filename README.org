@@ -100,7 +100,9 @@ export CONTROLPLANE_NODE_TYPE=c3.small.x86 \
   SSH_KEY=gh:BobyMCbobs \
   TALOS_VERSION=v1.2.6 \
   KUBERNETES_VERSION=v1.24.8 \
-  NODE_OS=ubuntu_22_04 \
+  NODE_OS=ubuntu_20_04 \
+  SERVICE_CIDR=10.96.0.0/12 \
+  POD_CIDR=10.244.0.0/16 \
   CONTROL_PLANE_MACHINE_COUNT=3
 clusterctl generate cluster cncf-coder --target-namespace cncf-coder --from ./cluster-template-packet-kubeadm.yaml \
     > ./cluster-cncf-coder-infra.yaml
@@ -130,14 +132,14 @@ kubectl -n cncf-coder get packetmachine,machine,taloscontrolplane,secret,cm
 #+end_src
 
 * Fetch Kubeconfig
-
-#+begin_src shell
+#+begin_src shell :results silent
 kubectl -n cncf-coder get secret cncf-coder-kubeconfig -o=jsonpath='{.data.value}' | base64 -d > /tmp/cncf-coder-kubeconfig
 #+end_src
 
-#+RESULTS:
-#+begin_example
-#+end_example
+* Mark as schedulable
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig taint nodes --all node-role.kubernetes.io/master-
+#+end_src
 
 * Prepare
 Cert-Manager
@@ -146,44 +148,6 @@ curl -o ./cert-manager.yaml -L https://github.com/cert-manager/cert-manager/rele
 #+end_src
 
 Cilium
-#+begin_src yaml :tangle ./values/cilium.yaml
-ipam:
-  mode: kubernetes
-  operator:
-    clusterPoolIPv4PodCIDR: 192.168.0.0/16
-
-nodePort:
-  enabled: true
-
-hostServices:
-  enabled: true
-
-externalIPs:
-  enabled: true
-
-hostPort:
-  enabled: true
-
-nodeinit:
-  enabled: true
-
-# kubeProxyReplacement: strict
-
-# hubble:
-#   tls:
-#     auto:
-#       method: certmanager
-#       certManagerIssuerRef:
-#         group: cert-manager.io
-#         kind: Issuer
-#         name: cilium-ca-issuer
-#   relay:
-#     enabled: true
-#   ui:
-#     enabled: true
-
-#+end_src
-
 #+begin_src shell
 helm repo add cilium https://helm.cilium.io/
 helm template cilium cilium/cilium \
