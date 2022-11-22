@@ -18,16 +18,34 @@ Running in the cluster will be
 - distribution(s) :: use as a proxy cache for each common registry to save bandwidth and time
 - External-DNS :: manage DNS in a Kubernetes-native way
 - Coder :: the server itself
+- a CSI provider :: storage!
+
+The domain /coder.sharing.io/ is where Coder lives.
+/*.coder.sharing.io/ is to point also to the same IP as Coder.
+
+An NS record links the managed records in the DNS provider to the PowerDNS in the cluster
+#+begin_src
+NS 	coder.sharing.io 	ns1.coder.sharing.io
+#+end_src
 
 * Needs
 - [ ] completion of architecture
-- [ ] a domain to use for hosting
+- [x] a domain to use for hosting
 
 * todo
 - [ ] configure and deploy powerdns
 - [ ] configure and deploy external-dns, point it to powerdns
 - [ ] create a cert and cluster-issuer for /coder.sharing.io/ and /*.coder.sharing.io/
 - [ ] configure and deploy Coder
+- [ ] set up NS DNS record on sharing.io DNS provider
+- [ ] configure storage (https://github.com/cncf-infra/coder-infra/issues/1)
+
+* Prerequisites
+
+ytt, for YAML updating
+#+begin_src shell :results silent
+go install github.com/vmware-tanzu/carvel-ytt/cmd/ytt@v0.43.0
+#+end_src
 
 * Setup
 A Kubernetes cluster is required to initialise the target cluster.
@@ -73,11 +91,6 @@ Optional Variables:
 
 #+end_example
 
-Create a namespace for the cluster to live in
-#+begin_src shell :results silent
-kubectl apply -f ./cluster-cncf-coder-namespace.yaml
-#+end_src
-
 Generate a static cluster configuration
 #+begin_src tmate :window coder-infra
 export CONTROLPLANE_NODE_TYPE=c3.small.x86 \
@@ -86,19 +99,22 @@ export CONTROLPLANE_NODE_TYPE=c3.small.x86 \
   PROJECT_ID=7a44b778-41d2-49fa-9c92-99148516c600 \
   SSH_KEY=gh:BobyMCbobs \
   TALOS_VERSION=v1.2.6 \
-  KUBERNETES_VERSION=v1.25.3 \
+  KUBERNETES_VERSION=v1.24.8 \
+  NODE_OS=ubuntu_22_04 \
   CONTROL_PLANE_MACHINE_COUNT=3
-clusterctl generate cluster cncf-coder --target-namespace cncf-coder --from cluster-template-packet-kubeadm.yaml \
+clusterctl generate cluster cncf-coder --target-namespace cncf-coder --from ./cluster-template-packet-kubeadm.yaml \
     > ./cluster-cncf-coder-infra.yaml
 #+end_src
 
 * Installation
 #+begin_src shell
+kubectl apply -f ./cluster-cncf-coder-namespace.yaml
 kubectl -n cncf-coder apply -f ./cluster-cncf-coder-infra.yaml
 #+end_src
 
 #+RESULTS:
 #+begin_example
+namespace/cncf-coder created
 kubeadmcontrolplane.controlplane.cluster.x-k8s.io/cncf-coder-control-plane created
 packetmachinetemplate.infrastructure.cluster.x-k8s.io/cncf-coder-control-plane created
 cluster.cluster.x-k8s.io/cncf-coder created
@@ -118,6 +134,10 @@ kubectl -n cncf-coder get packetmachine,machine,taloscontrolplane,secret,cm
 #+begin_src shell
 kubectl -n cncf-coder get secret cncf-coder-kubeconfig -o=jsonpath='{.data.value}' | base64 -d > /tmp/cncf-coder-kubeconfig
 #+end_src
+
+#+RESULTS:
+#+begin_example
+#+end_example
 
 * Prepare
 Cert-Manager
@@ -198,83 +218,34 @@ helm template -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx --versi
 "ingress-nginx" already exists with the same configuration, skipping
 #+end_example
 
+Longhorn
+#+begin_src shell :results silent
+helm repo add longhorn https://charts.longhorn.io
+helm template longhorn longhorn/longhorn --values values/longhorn.yaml --namespace longhorn-system --version 1.3.2 \
+    > ./longhorn-pre.yaml
+cat ./longhorn-pre.yaml | ytt --ignore-unknown-comments -f overlays/ -f - > ./longhorn.yaml
+rm ./longhorn-pre.yaml
+#+end_src
+
 * Install
-Cert-Manager
 #+begin_src shell
-kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./cert-manager.yaml
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace coder
 #+end_src
 
 #+RESULTS:
 #+begin_example
-namespace/cert-manager created
-customresourcedefinition.apiextensions.k8s.io/clusterissuers.cert-manager.io created
-customresourcedefinition.apiextensions.k8s.io/challenges.acme.cert-manager.io created
-customresourcedefinition.apiextensions.k8s.io/certificaterequests.cert-manager.io created
-customresourcedefinition.apiextensions.k8s.io/issuers.cert-manager.io created
-customresourcedefinition.apiextensions.k8s.io/certificates.cert-manager.io created
-customresourcedefinition.apiextensions.k8s.io/orders.acme.cert-manager.io created
-serviceaccount/cert-manager-cainjector created
-serviceaccount/cert-manager created
-serviceaccount/cert-manager-webhook created
-configmap/cert-manager-webhook created
-clusterrole.rbac.authorization.k8s.io/cert-manager-cainjector created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-issuers created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificates created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-orders created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-challenges created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
-clusterrole.rbac.authorization.k8s.io/cert-manager-view created
-clusterrole.rbac.authorization.k8s.io/cert-manager-edit created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
-clusterrole.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
-clusterrole.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-cainjector created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-issuers created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-clusterissuers created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificates created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-orders created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-challenges created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-ingress-shim created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-approve:cert-manager-io created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-controller-certificatesigningrequests created
-clusterrolebinding.rbac.authorization.k8s.io/cert-manager-webhook:subjectaccessreviews created
-role.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
-role.rbac.authorization.k8s.io/cert-manager:leaderelection created
-role.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
-rolebinding.rbac.authorization.k8s.io/cert-manager-cainjector:leaderelection created
-rolebinding.rbac.authorization.k8s.io/cert-manager:leaderelection created
-rolebinding.rbac.authorization.k8s.io/cert-manager-webhook:dynamic-serving created
-service/cert-manager created
-service/cert-manager-webhook created
-deployment.apps/cert-manager-cainjector created
-deployment.apps/cert-manager created
-deployment.apps/cert-manager-webhook created
-mutatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
-validatingwebhookconfiguration.admissionregistration.k8s.io/cert-manager-webhook created
+namespace/coder created
 #+end_example
 
 Cilium
-#+begin_src shell
+#+begin_src shell :results silent
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./cilium.yaml
 #+end_src
 
-#+RESULTS:
-#+begin_example
-serviceaccount/cilium unchanged
-serviceaccount/cilium-operator unchanged
-secret/hubble-ca-secret created
-secret/hubble-server-certs created
-configmap/cilium-config unchanged
-clusterrole.rbac.authorization.k8s.io/cilium unchanged
-clusterrole.rbac.authorization.k8s.io/cilium-operator unchanged
-clusterrolebinding.rbac.authorization.k8s.io/cilium unchanged
-clusterrolebinding.rbac.authorization.k8s.io/cilium-operator unchanged
-service/hubble-peer unchanged
-daemonset.apps/cilium configured
-daemonset.apps/cilium-node-init configured
-deployment.apps/cilium-operator configured
-#+end_example
+Cert-Manager
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./cert-manager.yaml
+#+end_src
 
 metallb
 #+begin_src shell :results silent
@@ -292,6 +263,8 @@ kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -n ingress-nginx -f ./ingr
 
 PowerDNS
 #+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace powerdns --dry-run=client -o yaml \
+  | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 export LB_IP="$(kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system get service cloud-provider-equinix-metal-kubernetes-external -o=jsonpath='{.status.loadBalancer.ingress[0].ip}')"
 envsubst '${LB_IP}' < ./powerdns.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 #+end_src
@@ -308,6 +281,13 @@ export LB_IP="$(kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system g
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./external-dns-crd.yaml
 envsubst '${LB_IP}' < ./external-dns.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 envsubst '${LB_IP}' < ./dnsendpoint.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+#+end_src
+
+Longhorn
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace longhorn-system --dry-run=client -o yaml \
+  | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./longhorn.yaml
 #+end_src
 
 * Tear down
