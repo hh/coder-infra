@@ -102,6 +102,19 @@ spec:
     app.kubernetes.io/instance: powerdns
     powerdns.com/role: api
 ---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: powerdns-db
+  namespace: powerdns
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: longhorn
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -161,8 +174,8 @@ spec:
                   key: MYSQL_PASS
       volumes:
         - name: powerdns-db
-          hostPath:
-            path: /var/lib/powerdns-postgresql
+          persistentVolumeClaim:
+            claimName: powerdns-db
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -171,7 +184,7 @@ metadata:
   namespace: powerdns
 data:
   pdns.conf: |
-    allow-dnsupdate-from=192.168.0.0/24
+    allow-dnsupdate-from=192.168.0.0/16
     api=yes
     api-key=pairingissharing
     default-soa-mail=hostmaster.coder.sharing.io
