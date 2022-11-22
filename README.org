@@ -17,8 +17,10 @@ Running in the cluster will be
 - PowerDNS :: use to allow setting up of DNS01 validation for TLS certs
 - distribution(s) :: use as a proxy cache for each common registry to save bandwidth and time
 - External-DNS :: manage DNS in a Kubernetes-native way
-- Coder :: the server itself
 - a CSI provider :: storage!
+- kubevirt :: vms
+- cluster-api :: orchestrate Kubernetes in Kubernetes
+- Coder :: the server itself
 
 The domain /coder.sharing.io/ is where Coder lives.
 /*.coder.sharing.io/ is to point also to the same IP as Coder.
@@ -31,14 +33,17 @@ NS 	coder.sharing.io 	ns1.coder.sharing.io
 * Needs
 - [ ] completion of architecture
 - [x] a domain to use for hosting
+- [ ] do cluster-api and kubevirt components live in the management cluster?
 
 * todo
-- [ ] configure and deploy powerdns
-- [ ] configure and deploy external-dns, point it to powerdns
-- [ ] create a cert and cluster-issuer for /coder.sharing.io/ and /*.coder.sharing.io/
+- [x] configure and deploy powerdns
+- [x] configure and deploy external-dns, point it to powerdns
+- [x] create a cert and cluster-issuer for /coder.sharing.io/ and /*.coder.sharing.io/
+- [x] set up NS DNS record on sharing.io DNS provider
+- [x] configure storage (https://github.com/cncf-infra/coder-infra/issues/1)
+- [ ] configure and deploy kubevirt
+- [ ] deploy cluster-api
 - [ ] configure and deploy Coder
-- [ ] set up NS DNS record on sharing.io DNS provider
-- [ ] configure storage (https://github.com/cncf-infra/coder-infra/issues/1)
 
 * Prerequisites
 
