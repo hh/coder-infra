@@ -17,7 +17,7 @@ Running in the cluster will be
 - PowerDNS :: use to allow setting up of DNS01 validation for TLS certs
 - distribution(s) :: use as a proxy cache for each common registry to save bandwidth and time
 - External-DNS :: manage DNS in a Kubernetes-native way
-- a CSI provider :: storage!
+- Longhorn :: storage!
 - kubevirt :: orchestrate VMs using Kubernetes primitives
 - cluster-api :: orchestrate Kubernetes in Kubernetes
 - Coder :: the server itself
