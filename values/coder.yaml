@@ -1,23 +1,14 @@
-postgres:
-  host: stackgres
-  user: postgres
-  port: "5432"
-  database: postgres
-coderd:
-  serviceSpec:
+coder:
+  service:
     type: ClusterIP
     externalTrafficPolicy: ""
-  replicas: 3
-  devurlsHost: "*.coder.sharing.io"
-  tls:
-    hostSecretName: letsencrypt-prod
-    devurlsHostSecretName: letsencrypt-prod
+  replicaCount: 1
   # image:
   #   tag: "v0.12.4"
-  extraEnvs:
+  env:
     - name: CODER_ACCESS_URL
       value: "https://coder.sharing.io"
-    - name: DB_PASSWORD
+    - name: CODER_PG_PASSWORD
       valueFrom:
         secretKeyRef:
           name: stackgres
@@ -39,11 +30,14 @@ coderd:
       value: "false"
     - name: CODER_WILDCARD_ACCESS_URL
       value: "*.coder.sharing.io"
-ingress:
-  enable: true
-  className: nginx
-  host: "coder.sharing.io"
-  annotations:
-    nginx.ingress.kubernetes.io/proxy-body-size: "0"
-  tls:
+  ingress:
     enable: true
+    className: nginx
+    host: "coder.sharing.io"
+    wildcardHost: "*.coder.sharing.io"
+    annotations:
+      nginx.ingress.kubernetes.io/proxy-body-size: "0"
+    tls:
+      secretName: letsencrypt-prod
+      wildcardSecretName: letsencrypt-prod
+      enable: true

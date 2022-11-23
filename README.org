@@ -219,8 +219,8 @@ helm template \
 
 Coder
 #+begin_src shell :results silent
-helm repo add coder https://helm.coder.com
-helm template -n coder coder coder/coder --values ./values/coder.yaml --version 1.37.0-rc.3 \
+helm template -n coder coder https://github.com/coder/coder/releases/download/v0.12.9/coder_helm_0.12.9.tgz \
+    --values ./values/coder.yaml \
     > ./coder.yaml
 #+end_src
 

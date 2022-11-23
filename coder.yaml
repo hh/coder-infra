@@ -1,500 +1,131 @@
 ---
-# Source: coder/templates/networkpolicies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: ingress-deny-all
-  namespace: coder
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component:  coderd
-spec:
-  # Deny all ingress traffic for workspace pods. The coder agent initiates
-  # all network traffic (TURN-over-HTTPS or STUN)
-  podSelector:
-    matchLabels:
-      com.coder.resource: "true"
-  policyTypes:
-    - Ingress
-  ingress: []
----
-# Source: coder/templates/networkpolicies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: coderd
-  namespace: coder
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/instance: coder
-      app.kubernetes.io/component: coderd
-  policyTypes:
-    - Ingress
-  # Deny all ingress traffic, except on our service ports
-  ingress:
-    - {}
----
-# Source: coder/templates/networkpolicies.yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: timescale
-  namespace: coder
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: timescale
-spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/instance: coder
-      app.kubernetes.io/component: timescale
-  policyTypes:
-    - Ingress
-    - Egress
-  # Deny all ingress traffic, except for traffic from coderd
-  ingress:
-    - from:
-        # Ideally, we would also use a namespaceSelector, but it's not possible
-        # to select using a namespace name, and we cannot rely on the standard
-        # kubernetes.io/metadata.name label being set, since that is a beta
-        # feature behind a feature gate.
-        - podSelector:
-            matchLabels:
-              app.kubernetes.io/instance: coder
-              app.kubernetes.io/component: coderd
-      ports:
-        - protocol: TCP
-          port: 5432
-  # Allow egress to istio service mesh. This shouldn't cause any issues if
-  # Istio is not in use.
-  egress:
-  # Allow all traffic to Istio control plane. This may need to be adjusted
-  # based on your cluster configuration.
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          app.kubernetes.io/name: istio-controlplane
-      podSelector:
-        matchLabels:
-          istio: pilot
-  # Allow all outbound DNS traffic (53/UDP and TCP)
-  - ports:
-    - port: 53
-      protocol: TCP
-    - port: 53
-      protocol: UDP
----
-# Source: coder/templates/rbac.yaml
-# The service account used by workspaces. It has no permissions and is 
-# used to bind pod security policies, labels and annotations (if provided).
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  namespace: "coder" 
-  name: environments
-  annotations: 
-    {}
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
----
-# Source: coder/templates/rbac.yaml
-# The service account for the built in workspace provider on application installation.
+# Source: coder/templates/coder.yaml
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: coder
-  namespace: "coder"
   annotations: 
     {}
   labels:
+    helm.sh/chart: coder-0.12.9
     app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
----
-# Source: coder/templates/timescale.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  namespace: "coder"
-  name: timescale
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
+    app.kubernetes.io/version: "0.12.9"
     app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: timescale
-    coder.deployment: timescale
 ---
 # Source: coder/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: coder
-  namespace: "coder"
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
+  name: coder-workspace-perms
 rules:
   - apiGroups: [""]
-    resources: ["persistentvolumeclaims", "pods", "services", "secrets", "serviceaccounts"]
-    verbs: ["create", "get", "list", "watch", "update", "patch", "delete", "deletecollection"]
+    resources: ["pods"]
+    verbs: ["*"]
   - apiGroups: [""]
-    resources: ["pods/exec"]
-    verbs: ["create"]
-  - apiGroups: [""]
-    resources: ["pods/log", "events"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["create", "get", "list", "watch", "update", "patch", "delete", "deletecollection"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["create", "get", "list", "watch", "update", "patch", "delete", "deletecollection"]
-  - apiGroups: ["storage.k8s.io"]
-    resources: ["storageclasses"]
-    verbs: ["get", "list"]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["*"]
 ---
 # Source: coder/templates/rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: coder
-  namespace: "coder"
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
 subjects:
   - kind: ServiceAccount
     name: coder
 roleRef:
-  kind: Role
-  name: coder
   apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: coder-workspace-perms
 ---
-# Source: coder/templates/coderd.yaml
+# Source: coder/templates/service.yaml
 apiVersion: v1
 kind: Service
 metadata:
-  name: coderd
-  namespace: "coder"
+  name: coder
   labels:
+    helm.sh/chart: coder-0.12.9
     app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
-  annotations: 
+    app.kubernetes.io/version: "0.12.9"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
     {}
 spec:
-  externalTrafficPolicy: ""
-  loadBalancerIP: ""
-  loadBalancerSourceRanges: []
   type: ClusterIP
-  selector:
-    coder.deployment: coderd
+  sessionAffinity: ClientIP
   ports:
-    - name: tcp-coderd
+    - name: "http"
       port: 80
-      targetPort: 8080
+      targetPort: "http"
       protocol: TCP
-    - name: tcp-coderd-https
-      port: 443
-      targetPort: 8443
-      protocol: TCP
----
-# Source: coder/templates/timescale.yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: timescale
-  namespace: coder
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: timescale
-    app: timescale
-    coder.deployment: timescale
-spec:
-  ports:
-    - port: 5432
-      name: tcp-timescale
   selector:
-    app: timescale
+    app.kubernetes.io/name: coder
+    app.kubernetes.io/instance: coder
 ---
-# Source: coder/templates/coderd.yaml
+# Source: coder/templates/coder.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: coderd
-  namespace: "coder"
+  name: coder
   labels:
+    helm.sh/chart: coder-0.12.9
     app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
-    app: coderd
-    coder.deployment: coderd
+    app.kubernetes.io/version: "0.12.9"
+    app.kubernetes.io/managed-by: Helm
   annotations: 
     {}
 spec:
-  replicas: 3
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxSurge: "25%"
-      maxUnavailable: "25%"
+  replicas: 1
   selector:
     matchLabels:
-      coder.deployment: coderd
+      app.kubernetes.io/name: coder
+      app.kubernetes.io/instance: coder
   template:
     metadata:
       labels:
         app.kubernetes.io/name: coder
         app.kubernetes.io/instance: coder
-        app.kubernetes.io/component: coderd
-        app.kubernetes.io/part-of: coder
-        app: coderd
-        coder.deployment: coderd
-      annotations: 
-        {}
     spec:
-      securityContext: 
-        runAsGroup: 1000
-        runAsNonRoot: true
-        runAsUser: 1000
-        seccompProfile:
-          type: RuntimeDefault
-      restartPolicy: Always
-      # terminationGracePeriodSeconds should be set to the upper bound for container rebuilds and creates.
-      # 5 minutes
-      terminationGracePeriodSeconds: 300
       serviceAccountName: coder
+      restartPolicy: Always
+      terminationGracePeriodSeconds: 60
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
           - podAffinityTerm:
               labelSelector:
                 matchExpressions:
-                - key: app.kubernetes.io/name
+                - key: app.coder.com
                   operator: In
                   values:
-                  - coderd
+                  - "true"
               topologyKey: kubernetes.io/hostname
-            weight: 1      
-      nodeSelector: 
-        kubernetes.io/arch: amd64
-        kubernetes.io/os: linux      
-      initContainers:
-        - name: migrations
-          image: "docker.io/coderenvs/coder-service:1.37.0-rc.3"
-          imagePullPolicy: Always
-          env:
-            - name: HUMAN_LOG
-              value: "/dev/stderr"
-            - name: JSON_LOG
-              value: ""
-            - name: STACKDRIVER_LOG
-              value: ""
-            - name: SPLUNK_URL
-              value: ""
-            - name: SPLUNK_TOKEN
-              value: ""
-            - name: SPLUNK_CHANNEL
-              value: ""
-            - name: NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: DEVURL_HOST
-              value: "*.coder.sharing.io"
-            - name: VERBOSE
-              value: "true"
-            - name: http_proxy
-              value: ""
-            - name: https_proxy
-              value: ""
-            - name: no_proxy
-              value: "cluster.local"            
-            - name: DB_HOST
-              value: timescale.coder.svc.cluster.local
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USER
-              value: coder
-            - name: DB_NAME
-              value: coder
-            - name: DB_SSL_MODE
-              value: disable            
-            - name: CODER_ACCESS_URL
-              value: https://coder.sharing.io
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  key: superuser-password
-                  name: stackgres
-            - name: CODER_PG_CONNECTION_URL
-              value: postgres://postgres:$(CODER_PG_PASSWORD)@stackgres:5432/postgres?sslmode=disable
-            - name: CODER_TEMPLATE_AUTOIMPORT
-              value: kubernetes
-            - name: CODER_VERBOSE
-              value: "true"
-            - name: CODER_AUDIT_LOGGING
-              value: "false"
-            - name: CODER_TELEMETRY
-              value: "false"
-            - name: CODER_TELEMETRY_TRACE
-              value: "false"
-            - name: CODER_WILDCARD_ACCESS_URL
-              value: '*.coder.sharing.io'
-          command:
-            - coderd
-            - migrate
-            - up
-          securityContext: 
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault          
-          volumeMounts:
-            - name: tmp-pgcerts
-              mountPath: /tmp/pgcerts
-            - name: tls
-              mountPath: /etc/ssl/certs/host
-              readOnly: true
-            - name: devurltls
-              mountPath: /etc/ssl/certs/devurls
-              readOnly: true
+            weight: 1
       containers:
-        - name: coderd
-          image: "docker.io/coderenvs/coder-service:1.37.0-rc.3"
-          imagePullPolicy: Always
-          ports:
-            - name: tcp-coderd
-              containerPort: 8080
-            - name: pprof-coderd
-              containerPort: 6060
-            - name: prom-coderd
-              containerPort: 2112
-          securityContext: 
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-            runAsGroup: 1000
-            runAsNonRoot: true
-            runAsUser: 1000
-            seccompProfile:
-              type: RuntimeDefault
-          # coderd is a daemon service, no need to allocate a tty for it.
-          tty: false
+        - name: coder
+          image: "ghcr.io/coder/coder:v0.12.9"
+          imagePullPolicy: IfNotPresent
+          resources:
+            {}
           env:
-            - name: SKIP_MIGRATIONS
-              value: "true"
-            - name: ASSETS_URL
-            - name: HUMAN_LOG
-              value: "/dev/stderr"
-            - name: JSON_LOG
-              value: ""
-            - name: STACKDRIVER_LOG
-              value: ""
-            - name: AMPLITUDE_API_KEY
-              value: ""
-              # ENVBOX_IMAGE describes the image used to provide
-              # additional features to users for running applications
-              # such as dockerd and kubernetes.
-            - name: ENVBOX_IMAGE
-              value: "docker.io/coderenvs/envbox:1.37.0-rc.3"
-            - name: CLUSTER_ADDRESS
-              value: "https://kubernetes.default.svc.cluster.local:443"
-            - name: NAMESPACE
-              valueFrom:
-                fieldRef:
-                  fieldPath: metadata.namespace
-            - name: DEVURL_HOST
-              value: "*.coder.sharing.io"
-            - name: POD_IP
+            - name: CODER_ADDRESS
+              value: "0.0.0.0:8080"
+            # Set the default access URL so a `helm apply` works by default.
+            # See: https://github.com/coder/coder/issues/5024
+            # Used for inter-pod communication with high-availability.
+            - name: KUBE_POD_IP
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: VERBOSE
-              value: "true"
-              
-              
-            - name: SSL_SERVER_CERT_FILE
-              value: /etc/ssl/certs/host/tls.crt:/etc/ssl/certs/devurls/tls.crt
-            - name: SSL_SERVER_KEY_FILE
-              value: /etc/ssl/certs/host/tls.key:/etc/ssl/certs/devurls/tls.key
-            - name: OIDC_REDIRECT_OPTIONS
-              value: "{}"
-            - name: http_proxy
-              value: ""
-            - name: https_proxy
-              value: ""
-            - name: no_proxy
-              value: "cluster.local"
-            - name: TRUST_PROXY_IP
-              value: "false"
-            - name: PROXY_TRUSTED_ORIGINS
-              value: ""
-            - name: PROXY_TRUSTED_HEADERS
-              value: ""
-            - name: CODER_ALTERNATE_HOSTNAMES
-              value: ""
-            - name: CODER_MIGRATE_BUILT_IN_PROVIDER
-              value: "true"                        
-            - name: DB_HOST
-              value: timescale.coder.svc.cluster.local
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USER
-              value: coder
-            - name: DB_NAME
-              value: coder
-            - name: DB_SSL_MODE
-              value: disable
+            - name: CODER_DERP_SERVER_RELAY_URL
+              value: "http://$(KUBE_POD_IP):8080"
+            
             - name: CODER_ACCESS_URL
               value: https://coder.sharing.io
-            - name: DB_PASSWORD
+            - name: CODER_PG_PASSWORD
               valueFrom:
                 secretKeyRef:
                   key: superuser-password
@@ -513,213 +144,67 @@ spec:
               value: "false"
             - name: CODER_WILDCARD_ACCESS_URL
               value: '*.coder.sharing.io'
-          command:
-            - coderd
-            - run
-          readinessProbe:
-            httpGet:
-              path: /cem-healthz
-              port: 8080
-            initialDelaySeconds: 10
-            failureThreshold: 15
-            periodSeconds: 10
-            timeoutSeconds: 3
-          livenessProbe:
-            httpGet:
-              path: /cem-healthz
-              port: 8080
-            initialDelaySeconds: 30
-            failureThreshold: 30
-            periodSeconds: 10
-            timeoutSeconds: 3          
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "512Mi"
-            limits:
-              cpu: "250m"
-              memory: "512Mi"          
-          volumeMounts:
-            - name: tmp-pgcerts
-              mountPath: /tmp/pgcerts
-            - name: tls
-              mountPath: /etc/ssl/certs/host
-              readOnly: true
-            - name: devurltls
-              mountPath: /etc/ssl/certs/devurls
-              readOnly: true      
-      volumes:
-        - name: tmp-pgcerts
-          emptyDir: {}
-        - name: tls
-          secret:
-            secretName: "letsencrypt-prod"
-        - name: devurltls
-          secret:
-            secretName: "letsencrypt-prod"
----
-# Source: coder/templates/timescale.yaml
-apiVersion: apps/v1
-kind: StatefulSet
-metadata:
-  name: timescale
-  namespace: coder
-  labels:
-    app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
-    app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: timescale
-  annotations: 
-    {}
-spec:
-  serviceName: timescale
-  replicas: 1
-  updateStrategy:
-    type: RollingUpdate
-    rollingUpdate:
-      partition: 0
-  selector:
-    matchLabels:
-      app: timescale
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: coder
-        helm.sh/chart: coder-1.37.0-rc.3
-        app.kubernetes.io/managed-by: Helm
-        app.kubernetes.io/instance: coder
-        app.kubernetes.io/version: 1.28.0
-        app.kubernetes.io/component: timescale
-        app: timescale
-        coder.deployment: timescale
-      annotations: 
-        {}
-    spec:
-      serviceAccountName: timescale
-      securityContext:
-        runAsNonRoot: true
-        # User 70 is postgres.
-        runAsUser: 70
-        runAsGroup: 70
-        fsGroup: 70
-      terminationGracePeriodSeconds: 60      
-      containers:
-        - name: timescale
-          image: "docker.io/coderenvs/timescale:1.37.0-rc.3"
-          imagePullPolicy: Always
-          readinessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - coder
-            initialDelaySeconds: 5
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
-            successThreshold: 1
-          livenessProbe:
-            exec:
-              command:
-                - pg_isready
-                - -U
-                - coder
-            initialDelaySeconds: 30
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 6
-            successThreshold: 1
           ports:
-            - containerPort: 5432
-          securityContext:
-            allowPrivilegeEscalation: false
-            readOnlyRootFilesystem: true
-          volumeMounts:
-            - name: timescale-data
-              mountPath: /var/lib/postgresql/data
-              readOnly: false
-            - name: tmp
-              mountPath: /tmp
-              readOnly: false
-            - name: run
-              mountPath: /var/run/postgresql
-              readOnly: false          
-          resources:
-            requests:
-              cpu: "250m"
-              memory: "1Gi"
-            limits:
-              cpu: "250m"
-              memory: "1Gi"
-          lifecycle:
-            preStop:
-              exec:
-                command:
-                  - pg_ctl
-                  - stop
-                  - --mode=fast
-                  - --timeout=60
-      volumes:
-        - name: tmp
-          emptyDir: {}
-        - name: run
-          emptyDir: {}
-  volumeClaimTemplates:
-    - metadata:
-        name: timescale-data
-      spec:        
-        accessModes: ["ReadWriteOnce"]
-        resources:
-          requests:
-            storage: "10Gi"
+            - name: "http"
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /api/v2/buildinfo
+              port: "http"
+              scheme: "HTTP"
+          livenessProbe:
+            httpGet:
+              path: /api/v2/buildinfo
+              port: "http"
+              scheme: "HTTP"
+          
+          volumeMounts: []
+      
+      volumes: []
 ---
 # Source: coder/templates/ingress.yaml
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: coderd-ingress
-  namespace: "coder"
+  name: coder
   labels:
+    helm.sh/chart: coder-0.12.9
     app.kubernetes.io/name: coder
-    helm.sh/chart: coder-1.37.0-rc.3
-    app.kubernetes.io/managed-by: Helm
     app.kubernetes.io/instance: coder
-    app.kubernetes.io/version: 1.28.0
-    app.kubernetes.io/component: coderd
-  annotations: 
+    app.kubernetes.io/version: "0.12.9"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "0"
 spec:
   
   ingressClassName: "nginx"
-  rules:
-  - host: "coder.sharing.io"
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: coderd
-            port:
-              name: tcp-coderd
 
-    
-  - host: "*.coder.sharing.io"
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: coderd
-            port:
-              name: tcp-coderd
+  rules:
+    - host: "coder.sharing.io"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: coder
+                port:
+                  name: "http"
+    - host: "*.coder.sharing.io"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: coder
+                port:
+                  name: "http"
   tls:
     - hosts:
-      - "coder.sharing.io"
+        - "coder.sharing.io"
       secretName: "letsencrypt-prod"
     - hosts:
-      - "*.coder.sharing.io"
+        - "*.coder.sharing.io"
       secretName: "letsencrypt-prod"
