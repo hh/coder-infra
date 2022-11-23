@@ -1,0 +1,44 @@
+coderd:
+  serviceSpec:
+    type: ClusterIP
+    externalTrafficPolicy: ""
+  replicas: 3
+  devurlsHost: "*.coder.sharing.io"
+  tls:
+    hostSecretName: letsencrypt-prod
+    devurlsHostSecretName: letsencrypt-prod
+  # image:
+  #   tag: "v0.12.4"
+  extraEnvs:
+    - name: CODER_ACCESS_URL
+      value: "https://coder.sharing.io"
+    - name: CODER_PG_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: stackgres
+          key: superuser-password
+    - name: CODER_PG_CONNECTION_URL
+      value: "postgres://postgres:$(CODER_PG_PASSWORD)@stackgres:5432/postgres?sslmode=disable"
+    # This env variable controls whether or not to auto-import the "kubernetes"
+    # template on first startup. This will not work unless
+    # coder.serviceAccount.workspacePerms is true.
+    - name: CODER_TEMPLATE_AUTOIMPORT
+      value: "kubernetes"
+    - name: CODER_VERBOSE
+      value: "true"
+    - name: CODER_AUDIT_LOGGING
+      value: "false"
+    - name: CODER_TELEMETRY
+      value: "false"
+    - name: CODER_TELEMETRY_TRACE
+      value: "false"
+    - name: CODER_WILDCARD_ACCESS_URL
+      value: "*.coder.sharing.io"
+ingress:
+  enable: true
+  className: nginx
+  host: "coder.sharing.io"
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "0"
+  tls:
+    enable: true

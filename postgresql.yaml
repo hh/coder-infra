@@ -1,0 +1,22 @@
+apiVersion: stackgres.io/v1
+kind: SGInstanceProfile
+metadata:
+  name: 1cpu-1gb
+  namespace: coder
+spec:
+  cpu: "1"
+  memory: 1Gi
+---
+apiVersion: stackgres.io/v1
+kind: SGCluster
+metadata:
+  name: stackgres
+  namespace: coder
+spec:
+  sgInstanceProfile: 1cpu-1gb
+  instances: 3
+  postgres:
+    version: "14"
+  pods:
+    persistentVolume:
+      size: 30Gi
