@@ -196,6 +196,31 @@ cat ./longhorn-pre.yaml | ytt --ignore-unknown-comments -f overlays/ -f - > ./lo
 rm ./longhorn-pre.yaml
 #+end_src
 
+Kubevirt
+#+begin_src shell :results silent
+curl -o kubevirt-operator.yaml -L https://github.com/kubevirt/kubevirt/releases/download/v0.58.0/kubevirt-operator.yaml
+curl -o kubevirt-cr.yaml -L https://github.com/kubevirt/kubevirt/releases/download/v0.58.0/kubevirt-cr.yaml
+curl -o cdi-operator.yaml -L https://github.com/kubevirt/containerized-data-importer/releases/download/v1.55.1/cdi-operator.yaml
+curl -o cdi-cr.yaml -L https://github.com/kubevirt/containerized-data-importer/releases/download/v1.55.1/cdi-cr.yaml
+#+end_src
+
+Stackgres (postgres)
+#+begin_src shell :results silent
+VERSION=1.2.0
+helm template \
+    -n stackgres stackgres-operator \
+    --set authentication.secretRef.name=stackgres-custom-auth \
+    "https://stackgres.io/downloads/stackgres-k8s/stackgres/${VERSION}/helm/stackgres-operator.tgz" \
+      > ./stackgres-operator.yaml
+#+end_src
+
+Coder
+#+begin_src shell :results silent
+helm repo add coder https://helm.coder.com
+helm template -n coder coder coder/coder --values ./values/coder.yaml --version 1.37.0-rc.3 \
+    > ./coder.yaml
+#+end_src
+
 * Install
 #+begin_src shell
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace coder
@@ -257,6 +282,51 @@ export LB_IP="$(kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system g
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f ./external-dns-crd.yaml
 envsubst '${LB_IP}' < ./external-dns.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 envsubst '${LB_IP}' < ./dnsendpoint.yaml | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+#+end_src
+
+Kubevirt
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply \
+    -f kubevirt-operator.yaml \
+    -f cdi-operator.yaml
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply \
+    -f kubevirt-cr.yaml \
+    -f cdi-cr.yaml
+#+end_src
+
+cluster-api
+#+begin_src tmate :window coder-infra
+export PACKET_API_KEY="$(kubectl -n cluster-api-provider-packet-system get secret cluster-api-provider-packet-manager-api-credentials -o=jsonpath='{.data.PACKET_API_KEY}' | base64 -d)"
+clusterctl --kubeconfig /tmp/cncf-coder-kubeconfig init --infrastructure packet --infrastructure kubevirt
+#+end_src
+
+StackGres
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace stackgres --dry-run=client -o yaml \
+  | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+
+PASSWORD=$(tr -cd '[:alnum:]' < /dev/urandom | fold -w40 | head -n1)
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n stackgres create secret generic stackgres-custom-auth \
+    --from-literal=k8sUsername=admin \
+    --from-literal=password="$(echo "${PASSWORD}" | sha256sum | awk '{print $1}')" \
+    --from-literal=clearPassword="${PASSWORD}" \
+    --dry-run=client \
+    -o yaml \
+    | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n stackgres apply -f ./stackgres-operator.yaml
+#+end_src
+
+Coder
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n coder apply -f ./postgresql.yaml
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n coder apply -f ./coder.yaml
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n coder apply -f ./coder-role+rolebinding.yaml
+#+end_src
+
+* Switch management
+#+begin_src tmate :window coder-infra
+clusterctl move -n cncf-coder --to-kubeconfig /tmp/cncf-coder-kubeconfig
 #+end_src
 
 * Tear down
