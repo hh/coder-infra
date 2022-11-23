@@ -11,24 +11,26 @@ Infrastructure to support a Coder instance, provided by CNCF, for the use of con
 Deploy a Kubernetes cluster running on Equinix Metal which runs Coder server.
 
 Running in the cluster will be
-- Cert-Manager
+- Cert-Manager :: manage LetsEncrypt TLS certs
 - Nginx-Ingress :: serve services like Coder server
 - MetalLB :: BGP IP allocation
 - PowerDNS :: use to allow setting up of DNS01 validation for TLS certs
 - distribution(s) :: use as a proxy cache for each common registry to save bandwidth and time
 - External-DNS :: manage DNS in a Kubernetes-native way
 - a CSI provider :: storage!
-- kubevirt :: vms
+- kubevirt :: orchestrate VMs using Kubernetes primitives
 - cluster-api :: orchestrate Kubernetes in Kubernetes
 - Coder :: the server itself
 
 The domain /coder.sharing.io/ is where Coder lives.
 /*.coder.sharing.io/ is to point also to the same IP as Coder.
 
-An NS record links the managed records in the DNS provider to the PowerDNS in the cluster
+An NS and A record links the managed records in the DNS provider to the PowerDNS in the cluster
 #+begin_src
-NS 	coder.sharing.io 	ns1.coder.sharing.io
+NS  coder.sharing.io      ns1.coder.sharing.io
+A   ns1.coder.sharing.io  x.x.x.x
 #+end_src
+The A record pointing to the LoadBalancer or floating IP.
 
 * Needs
 - [ ] completion of architecture
@@ -41,8 +43,8 @@ NS 	coder.sharing.io 	ns1.coder.sharing.io
 - [x] create a cert and cluster-issuer for /coder.sharing.io/ and /*.coder.sharing.io/
 - [x] set up NS DNS record on sharing.io DNS provider
 - [x] configure storage (https://github.com/cncf-infra/coder-infra/issues/1)
-- [ ] configure and deploy kubevirt
-- [ ] deploy cluster-api
+- [x] configure and deploy kubevirt
+- [x] deploy cluster-api
 - [ ] configure and deploy Coder
 
 * Prerequisites
@@ -144,6 +146,7 @@ kubectl -n cncf-coder get secret cncf-coder-kubeconfig -o=jsonpath='{.data.value
 * Mark as schedulable
 #+begin_src shell :results silent
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig taint nodes --all node-role.kubernetes.io/master-
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig taint nodes --all node-role.kubernetes.io/control-plane-
 #+end_src
 
 * Prepare
