@@ -226,12 +226,16 @@ helm template -n coder coder https://github.com/coder/coder/releases/download/v0
 
 * Install
 #+begin_src shell
-kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace coder
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace coder --dry-run=client -o yaml \
+    | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace coder-workspaces --dry-run=client -o yaml \
+    | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 #+end_src
 
 #+RESULTS:
 #+begin_example
-namespace/coder created
+namespace/coder configured
+namespace/coder-workspaces created
 #+end_example
 
 Cilium
@@ -324,7 +328,7 @@ Coder
 #+begin_src shell :results silent
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n coder apply -f ./postgresql.yaml
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n coder apply -f ./coder.yaml
-kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n coder apply -f ./coder-role+rolebinding.yaml
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n coder-workspaces apply -f ./coder-role+rolebinding.yaml
 #+end_src
 
 * Switch management
