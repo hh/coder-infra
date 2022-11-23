@@ -1,3 +1,8 @@
+postgres:
+  host: stackgres
+  user: postgres
+  port: "5432"
+  database: postgres
 coderd:
   serviceSpec:
     type: ClusterIP
@@ -12,7 +17,7 @@ coderd:
   extraEnvs:
     - name: CODER_ACCESS_URL
       value: "https://coder.sharing.io"
-    - name: CODER_PG_PASSWORD
+    - name: DB_PASSWORD
       valueFrom:
         secretKeyRef:
           name: stackgres

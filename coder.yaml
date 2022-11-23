@@ -366,7 +366,7 @@ spec:
               value: disable            
             - name: CODER_ACCESS_URL
               value: https://coder.sharing.io
-            - name: CODER_PG_PASSWORD
+            - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   key: superuser-password
@@ -494,7 +494,7 @@ spec:
               value: disable
             - name: CODER_ACCESS_URL
               value: https://coder.sharing.io
-            - name: CODER_PG_PASSWORD
+            - name: DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   key: superuser-password
