@@ -190,6 +190,18 @@ helm template -n ingress-nginx ingress-nginx ingress-nginx/ingress-nginx --versi
 "ingress-nginx" already exists with the same configuration, skipping
 #+end_example
 
+Metrics-Server
+#+begin_src shell :results silent
+helm repo add metrics-server https://kubernetes-sigs.github.io/metrics-server/
+helm template \
+    metrics-server \
+    -n kube-system \
+    -f ./values/metrics-server.yaml \
+    --version 3.8.2 \
+    metrics-server/metrics-server \
+      > ./metrics-server.yaml
+#+end_src
+
 Longhorn
 #+begin_src shell :results silent
 helm repo add longhorn https://charts.longhorn.io
@@ -256,6 +268,11 @@ metallb
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig create namespace metallb-system --dry-run=client -o yaml \
   | kubectl --kubeconfig /tmp/cncf-coder-kubeconfig apply -f -
 kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n metallb-system apply -f metallb.yaml
+#+end_src
+
+Metrics-Server
+#+begin_src shell :results silent
+kubectl --kubeconfig /tmp/cncf-coder-kubeconfig -n kube-system apply -f ./metrics-server.yaml
 #+end_src
 
 ingress-nginx

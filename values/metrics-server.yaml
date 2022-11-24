@@ -1,0 +1,9 @@
+replicas: 3
+args:
+  - --cert-dir=/tmp
+  - --logtostderr
+  - --kubelet-preferred-address-types=InternalIP
+  - --kubelet-insecure-tls
+  - --metric-resolution=15s
+metrics:
+  enabled: true
