@@ -1,0 +1,78 @@
+#!/bin/env bash
+set -x
+
+# shfmt needed for make
+which shfmt || sudo apt-get install -y shfmt
+# for converting k8s yaml to HCL
+go install github.com/jrhouston/tfk8s@latest
+# TODO: Make still failing, possible dependencies still missing.
+
+# install coder binary until we can build from src
+which coder || (
+	curl -L -o /tmp/coder.deb https://github.com/coder/coder/releases/download/v0.12.4/coder_0.12.4_linux_amd64.deb
+	sudo apt install -y /tmp/coder.deb
+	# Add completion
+	echo '. <(coder completion bash)' >>~/.bashrc
+)
+
+# Deploying coder (from helm for now)
+kubectl create namespace coder
+# ensure ingress works / certs secrets get copied
+kubectl label ns coder cert-manager-tls=sync
+# needs a postgres db
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm install postgres bitnami/postgresql \
+	--namespace coder \
+	--set auth.username=coder \
+	--set auth.password=coder \
+	--set auth.database=coder \
+	--set persistence.size=10Gi
+# deploy via helm for now
+envsubst <.sharing.io/values.template.yaml >.sharing.io/values.yaml
+helm upgrade --install coder .sharing.io/helm/ \
+	--namespace coder \
+	--values .sharing.io/values.yaml
+# # Wait for coder to deploy
+# kubectl rollout status deployment coder -n coder... so we can create the inital user
+kubectl wait -n coder --for=condition=ready pod -l app.kubernetes.io/name=coder
+
+# create the initial user
+# populate ii or pair as an admin user without logging in
+CODER_FIRST_USER_EMAIL=ii@ii.nz
+CODER_FIRST_USER_PASSWORD=ii
+CODER_FIRST_USER_USERNAME=ii
+CODER_URL=https://coder.${SHARINGIO_PAIR_BASE_DNS_NAME}
+# export vars to we can emulate a tty with a short expect script
+export CODER_FIRST_USER_EMAIL CODER_FIRST_USER_PASSWORD CODER_FIRST_USER_USERNAME
+coder login $CODER_URL
+export HELM_VALUES="service:\n  type: NodePort\nsyncer:\n  extraArgs:\n    - --tls-san=${SHARINGIO_PAIR_BASE_DNS_NAME}"
+export EXP_CLUSTER_RESOURCE_SET=true
+
+# Install kubevirt
+export RELEASE=$(curl https://storage.googleapis.com/kubevirt-prow/release/kubevirt/kubevirt/stable.txt)
+# Deploy the KubeVirt operator
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-operator.yaml
+# Create the KubeVirt CR (instance deployment request) which triggers the actual installation
+kubectl apply -f https://github.com/kubevirt/kubevirt/releases/download/${RELEASE}/kubevirt-cr.yaml
+# wait until all KubeVirt components are up
+kubectl -n kubevirt wait kv kubevirt --for condition=Available
+
+# install CDI support for KubeVirt
+export TAG=$(curl -s -w %{redirect_url} https://github.com/kubevirt/containerized-data-importer/releases/latest)
+export VERSION=$(echo ${TAG##*/})
+kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-operator.yaml
+kubectl create -f https://github.com/kubevirt/containerized-data-importer/releases/download/$VERSION/cdi-cr.yaml
+
+# cluster-api bootstrapping
+clusterctl init --infrastructure vcluster
+clusterctl init --infrastructure kubevirt
+clusterctl init --infrastructure=packet
+clusterctl init --bootstrap talos --control-plane talos
+
+# we'll need these extra rolebindings for the coder service account for our template to work
+# must be applied after coder helm chart is run and clusterctl init -- talos
+kubectl apply -f ./examples/templates/kubevirt-talos/role+rolebinding.yaml
+
+kubectl create ns coder-workspaces
+
+#TODO : upload / update the kubernetes template
