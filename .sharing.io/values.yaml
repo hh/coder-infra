@@ -13,7 +13,7 @@ coder:
     tag: "v0.13.1-devel-343ce356-amd64"
   env:
     - name: CODER_ACCESS_URL
-      value: "https://coder.talos.pair.sharing.io"
+      value: "https://coder.emacs.pair.sharing.io"
     - name: CODER_PG_CONNECTION_URL
       value: "postgres://coder:coder@postgres-postgresql.coder.svc.cluster.local:5432/coder?sslmode=disable"
     # This env variable controls whether or not to auto-import the "kubernetes"
@@ -30,12 +30,12 @@ coder:
     - name: CODER_TELEMETRY_TRACE
       value: "false"
     - name: CODER_WILDCARD_ACCESS_URL
-      value: "*.talos.pair.sharing.io"
+      value: "*.emacs.pair.sharing.io"
   ingress:
     enable: true
     className: nginx
-    host: "coder.talos.pair.sharing.io"
-    wildcardHost: "*.talos.pair.sharing.io"
+    host: "coder.emacs.pair.sharing.io"
+    wildcardHost: "*.emacs.pair.sharing.io"
     tls:
       enable: true
       secretName: letsencrypt-prod
